@@ -1,0 +1,33 @@
+# --- Secrets / local config (commit .env.example, never .env) ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Frontend (Stage 5) ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- Logs ---
+*.log
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# --- Local tool settings ---
+.claude/settings.local.json
