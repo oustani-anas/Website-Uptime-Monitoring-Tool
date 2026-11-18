@@ -8,6 +8,8 @@ One entry per working session or stage. Time is tracked against the 12–15 h bu
 | 1 — Backend skeleton & infra | 1.5 h | _fill in_ |
 | 2 — Models, migration, CRUD API, URL safety | 2 h | _fill in_ |
 | 3 — Worker: checks, state machine, incidents, retention, seed | 2.5 h | _fill in_ |
+| 4 — Stats endpoints | 1 h | _fill in_ |
+| 5 — Frontend skeleton & dashboard | 2 h | _fill in_ |
 
 ---
 
@@ -206,3 +208,109 @@ One entry per working session or stage. Time is tracked against the 12–15 h bu
 - **Seed was skipped on the dev DB** because it already held user-created monitors. That's correct behaviour. Run `docker compose down -v` to see the seed on a fresh volume.
 
 **Next:** Stage 4, the stats endpoints: uptime 24h/7d, response-time buckets, the checks list and the incidents list.
+
+---
+
+## Stage 4 — Stats endpoints
+**Goal:** All the availability numbers the frontend needs, served by the API. This completes the backend MVP.
+
+**Done**
+- **`app/services/stats.py`** (D19):
+  - `uptime_24h_by_monitor`: one grouped query for the dashboard.
+  - `monitor_stats`: uptime 24h and 7d plus the 24h average response time, in one query with `FILTER`.
+  - `response_time_buckets`: Postgres `date_bin`. 24h uses 5-minute buckets and 7d uses 1-hour buckets, aligned to UTC. Empty buckets are omitted, and the averages count successful checks only.
+  - `recent_checks`: newest first, with `before` for paging.
+  - `incident_history`: newest first.
+- **New endpoints:**
+  - `GET /api/monitors/{id}/checks?limit=1..500&before=<iso>`
+  - `GET /api/monitors/{id}/response-times?range=24h|7d`
+  - `GET /api/monitors/{id}/incidents?limit=1..100`
+- **Existing endpoints:** `GET /api/monitors` now fills `uptime_24h`. `GET /api/monitors/{id}` fills `stats.uptime_24h`, `uptime_7d` and `avg_response_ms_24h`.
+- New schemas: `CheckOut`, `ResponseTimePoint`, `ResponseTimes`.
+
+**Verification**
+- `pytest`: **134 passed**. The 13 new tests in `test_stats_api.py` cover:
+  - uptime math: 75 % over 24h and 37.5 % over 7d, checks older than 7 days ignored, rounding (66.67), `null` with no data
+  - failures excluded from the average
+  - the dashboard's per-monitor uptime
+  - bucket grouping, alignment, ordering and omitted empty buckets
+  - paging with `before`
+  - limit bounds
+  - incident order and durations, both ongoing and resolved
+  - 404 and 422 cases
+- Live, against real worker data:
+  - Google 100 % with an average of 703 ms. The DNS demo 0 % with an open incident since 17:25:33 (about 26 min).
+  - The chart returns 5-minute buckets with real averages and maxima.
+  - `range=1y` → 422 "Input should be '24h' or '7d'".
+
+**Issues:** none. All tests passed on the first run.
+
+**Status:** the backend MVP is complete: CRUD, SSRF protection, worker, incidents, retention, seed and stats.
+
+**Next:** Stage 5, the frontend dashboard. The remaining backend items are the webhook bonus (Stage 8) and the uvicorn proxy setting when nginx is added (Stage 5).
+
+---
+
+## Stage 5 — Frontend skeleton & dashboard
+**Goal:** The app runs in Docker on :8080 behind nginx. The dashboard shows live status, and monitors can be added, edited, paused, resumed and deleted from the UI.
+
+**Done**
+- **Infrastructure:**
+  - `frontend/Dockerfile` is a multi-stage build: `npm ci`, then lint, then `tsc --noEmit`, then `vite build`, then nginx.
+  - `nginx.conf` serves the SPA with a fallback for deep links, proxies `/api`, `/docs` and `/openapi.json` to FastAPI (same origin, so no CORS), gzips responses, and caches hashed assets for a year.
+  - A `frontend` service in Compose, with a healthcheck, waits for a healthy API.
+  - The Vite dev server proxies `/api` for local hot-reload development.
+- **API layer:**
+  - `api/types.ts` mirrors the backend schemas.
+  - `api/client.ts` is a typed fetch wrapper. Its `ApiError` maps FastAPI 422 details to form fields.
+  - `hooks/useMonitors.ts` holds the queries (polling: list every 10 s, detail every 15 s) and the mutations, which invalidate the cache.
+- **Dashboard:**
+  - Summary tiles.
+  - A sorted table (down, then unstable, up, checking, paused) that becomes cards on phones.
+  - Response times are coloured fast, ok or slow. A failed check is always red and shows the error type.
+  - "Updated Xs ago" plus manual refresh.
+  - Error banner that keeps the last data on screen, a loading skeleton and an empty state.
+- **Actions:** `useMonitorActions` provides add, edit, delete and pause in one place and will be reused by the detail page.
+  - Add and edit share one modal. 422 errors show under the matching field. Edit sends only the fields that changed.
+  - Delete asks for confirmation.
+  - **Toasts** appear for add, edit, pause, resume and delete (requested addition #4).
+- **`tabular-nums`** on every ms, % and count value (requested addition #3).
+- The detail page so far has routing, a header and a 404 state. The rest arrives in Stage 6.
+- The deferred uvicorn proxy-header item is resolved without code. Nothing uses the client IP, and nginx forwards `Host` with its port, so any redirect FastAPI generates points back to :8080.
+
+**Verification**
+- `npm run lint` and `npm run build` (strict TypeScript) are clean, and the Docker build runs both.
+- nginx: `/` and the deep link `/monitors/3` return the SPA (200), `/api/health` and `/docs` are proxied, assets are gzipped and served with `Cache-Control: public, immutable`.
+- **Visual checks** with headless Chrome screenshots: the desktop table, a phone at 390 px (via an iframe, because headless Chrome enforces a minimum window width of about 500 px), the detail header and the detail 404 state.
+- **Real UI flow**, driven through the Chrome DevTools protocol with a small Node script (no new dependencies), against the real API:
+  1. Open Add, submit `http://localhost:5432`, and "Private or local addresses are not allowed" appears under URL.
+  2. Add `https://example.org`, and the toast and a "Checking…" row appear.
+  3. Pause it, and a toast appears.
+  4. Delete it, the confirmation shows, then a toast, and the row is gone.
+
+  The test monitor was removed afterwards.
+- Backend is unchanged: 134 passed.
+
+**Issues / fixes from the visual review**
+- The HTTP 503 demo's response time was green because it was fast. A failed check is now always red.
+- The detail page's 404 was retried once before showing. Queries no longer retry 4xx errors.
+- The mobile card showed "— — 24h —" for a monitor with no checks. It now says "No checks yet". An empty uptime dash is muted like the other empty values.
+- ESLint 9 was end of life, so it was upgraded to 10, with `eslint-plugin-react-hooks` 7 (D21).
+
+**Next:** Stage 6, the detail page:
+- stat cards
+- the 24h uptime bar (requested addition #1)
+- the response-time chart with the "No successful checks in this period" state (requested addition #2)
+- recent checks with "Load more"
+- incidents
+
+### Stage 5 addition — Dark mode (requested)
+- `dark:` variants were added to every component, using one consistent mapping: slate-950 page, slate-900 cards, softer status tints, and an inverted primary button.
+- `hooks/useTheme.ts` and the header `ThemeToggle`: follow the OS by default, react to live OS changes, and remember a manual choice in `localStorage`. An inline script in `index.html` prevents a flash on load (D22).
+- **Verified** in headless Chrome over the DevTools protocol:
+  - With the OS emulated as dark, the page renders dark.
+  - The toggle switches to light and saves `"light"`.
+  - After a reload, the saved choice wins over the OS.
+  - With the OS emulated as light, the page renders unchanged.
+- **Fix from the visual review:** in dark mode the modal blended into the page. It now has a subtle ring and a darker backdrop.
+- Lint and build are clean.

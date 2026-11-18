@@ -176,7 +176,7 @@ A partial unique index `(monitor_id) WHERE resolved_at IS NULL` allows at most o
 - **Interval-only change:** `next_check_at = coalesce(last_checked_at, now) + new interval`.
 
 ### Uptime
-`uptime % = count(is_up) / count(*)` over the window (24 h or 7 d), or `null` if there are no checks.
+`uptime % = count(is_up) / count(*)` over the window (24 h or 7 d), rounded to 2 decimals, or `null` if there are no checks. `avg_response_ms_24h` averages successful checks only.
 
 ### Retention
 Every 60 minutes the worker deletes checks with `checked_at < now() - RETENTION_DAYS` in batches. Incidents are kept.
@@ -235,7 +235,7 @@ Example error:
   "response_time_ms": 88, "error_type": "http_5xx", "error_message": "HTTP 503"}]
 ```
 
-**`GET /api/monitors/{id}/response-times?range=24h|7d`**: 24h uses 5-minute buckets, 7d uses 1-hour buckets (`date_bin`).
+**`GET /api/monitors/{id}/response-times?range=24h|7d`**: 24h uses 5-minute buckets, 7d uses 1-hour buckets (`date_bin`). Buckets are aligned to UTC boundaries. Buckets with no checks are omitted. `avg_ms` and `max_ms` are computed from successful checks only and are `null` when every check in the bucket failed.
 ```json
 {"range": "24h", "bucket_seconds": 300,
  "points": [{"t": "2026-11-18T10:00:00Z", "avg_ms": 143, "max_ms": 210, "checks": 5, "failures": 0}]}
@@ -272,6 +272,7 @@ Unknown monitor → `404 {"detail": "Monitor not found"}`.
   - Recent checks table.
   - Incidents list: start, end or "Ongoing", duration, cause.
   - Polls every 15 s.
+- **Theme:** light and dark. It follows the OS setting by default, and a header toggle saves the choice (DECISIONS D22).
 - **Components:** `StatusBadge`, `MonitorFormModal` (shared for add and edit; shows API 422 errors per field), `ConfirmDialog`, `StatCard`, `ResponseTimeChart`, `ChecksTable`, `IncidentsList`, `RelativeTime`, `EmptyState`.
 - **API layer:** a typed `api/client.ts` fetch wrapper and `hooks/useMonitors.ts`, whose queries and mutations invalidate the cache on success.
 

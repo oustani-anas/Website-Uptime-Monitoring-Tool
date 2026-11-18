@@ -2,7 +2,7 @@
 
 A self-hosted web app that monitors websites: periodic health checks, response times, uptime stats, and incident history.
 
-> 🚧 Work in progress. The backend is being built stage by stage (see `docs/DEVLOG.md`). The full README comes in Stage 7.
+> 🚧 Work in progress. The backend is complete and the frontend dashboard is in place; the monitor detail page comes next (see `docs/DEVLOG.md`). The full README comes in Stage 7.
 
 ## Run
 
@@ -12,8 +12,12 @@ Requires Docker with Docker Compose v2.
 cp .env.example .env && docker compose up
 ```
 
-- API health: http://localhost:8000/api/health
-- API docs (OpenAPI): http://localhost:8000/docs
+- **App: http://localhost:8080**
+- API docs (OpenAPI): http://localhost:8080/docs (also directly on http://localhost:8000/docs)
+- API health: http://localhost:8080/api/health
+
+### Frontend development (optional)
+With the stack running, `cd frontend && npm install && npm run dev` serves the app with hot reload on http://localhost:5173. It proxies `/api` to the API on port 8000.
 
 ## Test
 

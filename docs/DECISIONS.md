@@ -100,6 +100,42 @@ Short records: **Context → Decision → Trade-off.** Numbered in the order the
 - **Decision:** `record_result` locks the monitor row (`SELECT … FOR UPDATE`). It drops the result if the monitor is gone or paused, or if its URL differs from the URL that was checked.
 - **Trade-off:** That one check is lost, which is correct. Otherwise an old URL's result would overwrite the reset done by the API.
 
+## D19. Stats computed in SQL at read time, with a fixed number of queries
+- **Context:** The dashboard polls every 10 s and shows `uptime_24h` for every monitor. The detail page needs several numbers.
+- **Decision:**
+  - The dashboard gets one `GROUP BY monitor_id` query for every monitor's uptime, not one query per monitor.
+  - The detail page gets one query using `count(*) FILTER (WHERE …)` for uptime 24h, uptime 7d and the average response time.
+  - The chart is one `date_bin` query.
+  - Response-time averages use successful checks only.
+  - Empty chart buckets are omitted, because "no data" is not "0 ms".
+- **Trade-off:** There's no precomputed rollup table, so each read scans the window's rows. They're served by the `(monitor_id, checked_at)` and `(checked_at)` indexes. At 30 s intervals that's 20k rows per monitor per week, which is cheap. Hourly rollups would be the next step at much larger scale.
+
+## D20. Frontend: no component library, native `<dialog>`, server state only in TanStack Query
+- **Context:** The UI is small: two pages, one form and a few dialogs. It has to look polished without adding weight.
+- **Decision:**
+  - Tailwind utility classes plus about 10 small components. Icons are inline SVG.
+  - Modals use the native `<dialog>` element, which provides focus trapping, Esc to close and the backdrop for free.
+  - All server data lives in TanStack Query (polling, invalidation after mutations). There's no global client store.
+  - A custom ~50-line toast context handles notifications.
+  - Status is always shown as a coloured dot plus a text label, never colour alone. Numbers use `tabular-nums`, so columns don't jitter as values refresh.
+  - Queries don't retry 4xx responses. Retrying a 404 only delays the "not found" message.
+- **Trade-off:** A dialog's top layer renders above toasts while it's open. That's acceptable, because toasts appear after the dialog closes.
+
+## D21. Dependency versions: latest releases at least 2 weeks old, within well-known majors
+- **Context:** Very recent majors (React Router 8, TypeScript 7, Vite 8) were available, and brand-new releases carry more risk.
+- **Decision:** Pin exact versions with a lockfile (`npm ci` in Docker): React 19.3, React Router 7, TanStack Query 5, Recharts 3, Vite 7, Tailwind 4, TypeScript 5.9 and ESLint 10. ESLint 9 had reached end of life, so it was upgraded.
+- **Trade-off:** We're one major behind the newest in a few places, in exchange for a predictable build.
+
+## D22. Dark mode: follow the OS by default, with a remembered manual toggle
+- **Context:** This was requested after Stage 5, and the requirement was to keep it simple.
+- **Decision:**
+  - Tailwind `dark:` variants keyed on a `dark` class on `<html>`.
+  - With no saved choice, the app follows `prefers-color-scheme`, including live OS changes. The header toggle saves an explicit choice in `localStorage`.
+  - A 6-line inline script in `index.html` applies the theme before first paint, so there's no light flash.
+  - `color-scheme` switches native controls too.
+  - One consistent light→dark colour mapping was applied across all components.
+- **Trade-off:** Every new component needs its `dark:` classes, including the Stage 6 chart colours. There's no third "system" option in the toggle. To return to following the OS, clear the saved choice.
+
 ## D12. Migrations run on API container start; the worker waits for a healthy API
 - **Context:** The reviewer should not have to run any manual setup.
 - **Decision:** The API entrypoint runs `alembic upgrade head` before uvicorn. The worker `depends_on` the API with `condition: service_healthy`.

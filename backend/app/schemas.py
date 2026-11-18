@@ -99,7 +99,7 @@ class MonitorOut(BaseModel):
     last_error_type: ErrorType | None
     next_check_at: datetime
     created_at: datetime
-    uptime_24h: float | None = None  # filled in by the stats service (Stage 4)
+    uptime_24h: float | None = None  # filled in by the stats service
 
     @computed_field
     @property
@@ -113,10 +113,38 @@ class MonitorOut(BaseModel):
 
 
 class MonitorStats(BaseModel):
-    uptime_24h: float | None = None  # Stage 4
-    uptime_7d: float | None = None  # Stage 4
-    avg_response_ms_24h: int | None = None  # Stage 4
+    uptime_24h: float | None = None
+    uptime_7d: float | None = None
+    avg_response_ms_24h: int | None = None
     open_incident: IncidentOut | None = None
+
+
+class CheckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    checked_at: datetime
+    is_up: bool
+    status_code: int | None
+    response_time_ms: int | None
+    error_type: ErrorType | None
+    error_message: str | None
+
+
+class ResponseTimePoint(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    t: datetime  # bucket start
+    avg_ms: int | None  # successful checks only; None if all failed
+    max_ms: int | None
+    checks: int
+    failures: int
+
+
+class ResponseTimes(BaseModel):
+    range: Literal["24h", "7d"]
+    bucket_seconds: int
+    points: list[ResponseTimePoint]
 
 
 class MonitorDetail(MonitorOut):
