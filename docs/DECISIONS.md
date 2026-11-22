@@ -117,6 +117,7 @@ Short records: **Context → Decision → Trade-off.** Numbered in the order the
   - Modals use the native `<dialog>` element, which provides focus trapping, Esc to close and the backdrop for free.
   - All server data lives in TanStack Query (polling, invalidation after mutations). There's no global client store.
   - A custom ~50-line toast context handles notifications.
+  - Icon buttons have an `aria-label` with the full action ("Pause Google") and an instant visual tooltip ("Pause"), shown on hover and on keyboard focus. Tooltips sit to the left so the table's rounded container doesn't clip them.
   - Status is always shown as a coloured dot plus a text label, never colour alone. Numbers use `tabular-nums`, so columns don't jitter as values refresh.
   - Queries don't retry 4xx responses. Retrying a 404 only delays the "not found" message.
 - **Trade-off:** A dialog's top layer renders above toasts while it's open. That's acceptable, because toasts appear after the dialog closes.
@@ -135,6 +136,23 @@ Short records: **Context → Decision → Trade-off.** Numbered in the order the
   - `color-scheme` switches native controls too.
   - One consistent light→dark colour mapping was applied across all components.
 - **Trade-off:** Every new component needs its `dark:` classes, including the Stage 6 chart colours. There's no third "system" option in the toggle. To return to following the OS, clear the saved choice.
+
+## D23. Duplicate URLs are rejected (409) by an application check, not a unique index
+- **Context:** Review feedback: the same site could be added twice (e.g. "google" and "Google", both `https://google.com`), which duplicates checks and alerts.
+- **Decision:**
+  - Create, and any PATCH that changes the URL, returns **409 "This URL is already monitored"** when another monitor has the same normalized URL. The detail uses the 422 field-error shape, so the form shows it under URL with no frontend change.
+  - Normalization now also maps a bare root path (`https://x.com/`) to `https://x.com`.
+  - `http://` and `https://`, or different paths, remain separate monitors, because they're genuinely different checks.
+- **Trade-off:** This is an app-level check, not a `UNIQUE` index. The existing dev data already contained a duplicate, and a migration would have had to delete user data. In a single-user tool, two concurrent identical inserts are a negligible race. Once the data is clean, a unique index on `url` could be added as follow-up hardening.
+
+## D24. Search and filters run in the browser, with their state in the URL
+- **Context:** Users asked to filter monitors by status and search by name or URL.
+- **Decision:**
+  - Filtering runs in the browser over the list the dashboard already polls every 10 s. It's instant and needs no API change.
+  - The filter state lives in the URL query (`?status=…&q=…`), so a refresh keeps it, the link can be shared, and the browser's Back button works.
+  - Updates use `replace`, so typing doesn't add a history entry per keystroke.
+  - The chip counts always cover the full list, so a user can see where monitors are before clicking.
+- **Trade-off:** It doesn't scale to tens of thousands of monitors. At that point, server-side `?status=&q=` parameters with pagination would replace it.
 
 ## D12. Migrations run on API container start; the worker waits for a healthy API
 - **Context:** The reviewer should not have to run any manual setup.

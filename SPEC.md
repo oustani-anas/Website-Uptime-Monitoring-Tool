@@ -249,6 +249,12 @@ Example error:
 
 Unknown monitor → `404 {"detail": "Monitor not found"}`.
 
+Duplicate URL (on create, or a PATCH that changes the URL) → `409` with the same field-error shape as validation errors:
+```json
+{"detail": [{"type": "duplicate_url", "loc": ["body", "url"], "msg": "This URL is already monitored"}]}
+```
+URLs are compared after normalization: lowercase scheme and host, no fragment, and `https://x.com/` treated as `https://x.com`. A different scheme or path counts as a different monitor.
+
 ## 8. Frontend pages and components
 
 - **Routing** (react-router): `/` is the Dashboard, `/monitors/:id` is the Monitor detail page.
@@ -264,6 +270,7 @@ Unknown monitor → `404 {"detail": "Monitor not found"}`.
     - interval
     - row actions: pause/resume, edit, delete
   - DOWN monitors are sorted first. There is an empty state for no monitors.
+  - **Search and filters:** a search box (name or URL, case-insensitive) and status chips (All, Up, Down, Unstable, Paused) with live counts. Filtering happens in the browser. The state is kept in the URL (`?status=down&q=google`), so it survives a refresh and can be shared. A "No monitors match" state offers **Clear filters**.
   - Polls every 10 s and refetches when the window regains focus.
 - **Monitor detail**
   - Header: badge, name, URL link, "Down since …" when an incident is open, and actions.

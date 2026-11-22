@@ -230,3 +230,40 @@ async def test_delete_cascades_checks_and_incidents(client: AsyncClient, session
     for model in (Check, Incident):
         count = await session.scalar(select(func.count()).select_from(model).where(model.monitor_id == m["id"]))
         assert count == 0
+
+
+# ---------- duplicate URLs ----------
+
+
+@pytest.mark.parametrize(
+    "second_url",
+    ["https://example.com", "https://EXAMPLE.com/", "  https://example.com#top "],  # same URL after normalization
+)
+async def test_duplicate_url_is_rejected_with_409(client: AsyncClient, second_url: str) -> None:
+    await create(client, url="https://example.com")
+    resp = await client.post("/api/monitors", json={"name": "Again", "url": second_url})
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == [
+        {"type": "duplicate_url", "loc": ["body", "url"], "msg": "This URL is already monitored"}
+    ]
+
+
+async def test_different_scheme_or_path_is_not_a_duplicate(client: AsyncClient) -> None:
+    await create(client, url="https://example.com")
+    await create(client, name="HTTP", url="http://example.com")  # different check (no TLS)
+    await create(client, name="Health", url="https://example.com/health")
+
+
+async def test_patch_to_another_monitors_url_is_rejected(client: AsyncClient) -> None:
+    await create(client, url="https://example.com")
+    other = await create(client, name="Other", url="https://example.org")
+    resp = await client.patch(f"/api/monitors/{other['id']}", json={"url": "https://example.com/"})
+    assert resp.status_code == 409
+    assert (await client.get(f"/api/monitors/{other['id']}")).json()["url"] == "https://example.org"
+
+
+async def test_patch_with_its_own_url_is_allowed(client: AsyncClient) -> None:
+    m = await create(client, url="https://example.com")
+    resp = await client.patch(f"/api/monitors/{m['id']}", json={"url": "https://example.com/", "name": "Renamed"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Renamed"

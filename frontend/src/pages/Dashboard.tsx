@@ -1,17 +1,40 @@
-import { Button } from "../components/Button";
+import { useSearchParams } from "react-router";
+import { Button, IconButton } from "../components/Button";
 import { PlusIcon, RefreshIcon } from "../components/Icons";
 import { MonitorTable } from "../components/MonitorTable";
+import { MonitorToolbar } from "../components/MonitorToolbar";
 import { EmptyState, ErrorBanner, TableSkeleton } from "../components/States";
 import { SummaryBar } from "../components/SummaryBar";
 import { useMonitorActions } from "../components/useMonitorActions";
 import { useMonitors } from "../hooks/useMonitors";
 import { useNow } from "../hooks/useNow";
+import { filterMonitors, parseStatusFilter, type StatusFilter } from "../lib/filter";
 import { formatRelative } from "../lib/format";
 
 export function Dashboard() {
   const { data: monitors, error, isPending, isFetching, dataUpdatedAt, refetch } = useMonitors();
   const actions = useMonitorActions();
   const now = useNow();
+
+  // Filters live in the URL (?status=down&q=google): they survive a refresh and can be shared.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = parseStatusFilter(searchParams.get("status"));
+  const query = searchParams.get("q") ?? "";
+  const visible = monitors ? filterMonitors(monitors, status, query) : [];
+
+  function updateFilters(changes: { status?: StatusFilter; q?: string }) {
+    const next = new URLSearchParams(searchParams);
+    if (changes.status !== undefined) {
+      if (changes.status === "all") next.delete("status");
+      else next.set("status", changes.status);
+    }
+    if (changes.q !== undefined) {
+      if (changes.q) next.set("q", changes.q);
+      else next.delete("q");
+    }
+    // replace: typing in the search box shouldn't add a history entry per keystroke
+    setSearchParams(next, { replace: true });
+  }
 
   const addButton = (
     <Button variant="primary" onClick={actions.openCreate}>
@@ -30,15 +53,9 @@ export function Dashboard() {
             ) : (
               "Loading…"
             )}
-            <button
-              type="button"
-              onClick={() => refetch()}
-              aria-label="Refresh now"
-              title="Refresh now"
-              className="rounded p-1 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100"
-            >
+            <IconButton label="Refresh now" tooltip="Refresh" size="sm" onClick={() => refetch()}>
               <RefreshIcon className={`size-3.5 ${isFetching ? "animate-spin" : ""}`} />
-            </button>
+            </IconButton>
           </p>
         </div>
         {addButton}
@@ -64,7 +81,26 @@ export function Dashboard() {
         ) : (
           <>
             <SummaryBar monitors={monitors} />
-            <MonitorTable monitors={monitors} actions={actions} />
+            <MonitorToolbar
+              monitors={monitors}
+              status={status}
+              query={query}
+              onStatusChange={(s) => updateFilters({ status: s })}
+              onQueryChange={(q) => updateFilters({ q })}
+            />
+            {visible.length > 0 ? (
+              <MonitorTable monitors={visible} actions={actions} />
+            ) : (
+              <EmptyState
+                title="No monitors match"
+                description={
+                  query ? `Nothing matches “${query.trim()}” with this filter.` : "No monitors have this status right now."
+                }
+                action={
+                  <Button onClick={() => updateFilters({ status: "all", q: "" })}>Clear filters</Button>
+                }
+              />
+            )}
           </>
         ))}
 

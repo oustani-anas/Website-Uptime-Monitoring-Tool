@@ -30,5 +30,6 @@ Tests use a separate `uptime_test` database, which is created automatically the 
 ## Documentation
 
 - [`SPEC.md`](SPEC.md): scope, architecture, schema, check logic, API, build plan
+- [`docs/WORKER.md`](docs/WORKER.md): how the worker schedules checks and decides up/down
 - [`docs/DECISIONS.md`](docs/DECISIONS.md): technical decisions and trade-offs
 - [`docs/DEVLOG.md`](docs/DEVLOG.md): progress log per stage

@@ -23,19 +23,35 @@ export function Button({
   );
 }
 
-/** Square icon-only button; `label` is required for screen readers and the tooltip. */
+/**
+ * Square icon-only button with an instant tooltip.
+ * - `label`: full accessible name for screen readers, e.g. "Pause Google".
+ * - `tooltip`: short visible text shown on hover and keyboard focus, e.g. "Pause".
+ * The tooltip sits to the LEFT of the button so it stays inside the row and is
+ * never clipped by the table's rounded, overflow-hidden container.
+ */
 export function IconButton({
   label,
+  tooltip = label,
+  size = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; tooltip?: string; size?: "sm" | "md" }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className={`inline-flex size-8 items-center justify-center rounded-md text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:outline-2 focus-visible:outline-slate-900 dark:focus-visible:outline-slate-100 disabled:opacity-50 ${className}`}
-      {...props}
-    />
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        className={`inline-flex ${size === "sm" ? "size-6" : "size-8"} items-center justify-center rounded-md text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:outline-2 focus-visible:outline-slate-900 dark:focus-visible:outline-slate-100 disabled:opacity-50 ${className}`}
+        {...props}
+      />
+      {/* Visual only: the button's aria-label already announces it. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 right-full z-20 mr-1.5 -translate-y-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-has-focus-visible:opacity-100 dark:bg-slate-700"
+      >
+        {tooltip}
+      </span>
+    </span>
   );
 }

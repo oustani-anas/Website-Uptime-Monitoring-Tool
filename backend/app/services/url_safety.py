@@ -62,7 +62,10 @@ def validate_url_format(url: str) -> str:
     netloc = f"[{host}]" if ":" in host else host
     if port is not None:
         netloc = f"{netloc}:{port}"
-    return urlunsplit((scheme, netloc, parts.path, parts.query, ""))
+    # "https://x.com/" and "https://x.com" request the same resource; store one form
+    # so duplicate detection treats them as the same URL.
+    path = "" if parts.path == "/" else parts.path
+    return urlunsplit((scheme, netloc, path, parts.query, ""))
 
 
 def is_public_ip(ip: IPAddress) -> bool:

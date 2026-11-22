@@ -41,7 +41,10 @@ def test_format_rejects(url: str, message: str) -> None:
         ("https://example.com", "https://example.com"),
         ("  HTTPS://Example.COM/Path?q=1#frag ", "https://example.com/Path?q=1"),  # path case kept
         ("http://example.com:8080/x", "http://example.com:8080/x"),
-        ("http://[2606:4700::1111]/", "http://[2606:4700::1111]/"),
+        ("http://[2606:4700::1111]/", "http://[2606:4700::1111]"),
+        ("https://example.com/", "https://example.com"),  # root "/" == no path
+        ("https://example.com/?q=1", "https://example.com?q=1"),
+        ("https://example.com/docs/", "https://example.com/docs/"),  # non-root trailing slash is kept
     ],
 )
 def test_format_normalizes(url: str, expected: str) -> None:

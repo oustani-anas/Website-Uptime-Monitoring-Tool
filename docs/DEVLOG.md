@@ -314,3 +314,34 @@ One entry per working session or stage. Time is tracked against the 12–15 h bu
   - With the OS emulated as light, the page renders unchanged.
 - **Fix from the visual review:** in dark mode the modal blended into the page. It now has a subtle ring and a darker backdrop.
 - Lint and build are clean.
+
+### Stage 5 review fixes (feedback before Stage 6)
+1. **Duplicate URLs** (D23):
+   - The API returns **409 "This URL is already monitored"** on create and on a URL-changing PATCH. The form shows it under the URL field without frontend changes.
+   - The root path is normalized (`https://x.com/` → `https://x.com`).
+   - 9 new tests: duplicates after normalization (case, trailing `/`, fragment), a different scheme or path allowed, a PATCH to another monitor's URL rejected, a PATCH with its own URL allowed. `pytest`: **143 passed**.
+   - The dev DB already has one duplicate pair (#3 "Google" and #8 "google"). It was left for the user to remove, because the check doesn't delete existing data.
+2. **Tooltips:**
+   - `IconButton` now shows an instant styled tooltip on hover and on keyboard focus. Native `title` attributes were removed, so there are no double tooltips.
+   - Short visible text ("Pause", "Resume", "Edit", "Delete", "Dark mode", "Refresh"), with the full `aria-label` for screen readers ("Delete Google").
+   - The refresh button now uses `IconButton` too.
+3. **Light mode review** in headless Chrome with the OS emulated as light:
+   - The dashboard, the row tooltip, the theme-toggle tooltip and the add form showing the duplicate error all render correctly.
+   - The phone width (390 px) is clean.
+   - No native `title` attributes remain.
+
+### Search and filters (requested before deployment)
+- **What was added:**
+  - `lib/filter.ts`: `filterMonitors()` and `parseStatusFilter()`.
+  - `components/MonitorToolbar.tsx`: a search box with a clear button, plus status chips (All, Up, Down, Unstable, Paused) with counts and `aria-pressed`.
+  - The Dashboard keeps the filter state in the URL via `useSearchParams` (D24).
+  - A "No monitors match" empty state with a **Clear filters** button.
+- **Verified** by driving the real UI in headless Chrome over the DevTools protocol:
+  - **Down** shows exactly the 5 down monitors, with `?status=down`.
+  - Search by name ("goo" → google) and by URL ("aoustani.com") both work.
+  - Search and a chip combine (`?q=a&status=up` → 3 rows).
+  - The filter survives a reload.
+  - A query with no match shows the empty state, and **Clear filters** restores all 11 rows and a clean URL.
+  - Screenshots are clean in light, in dark, and on a 390 px phone, where the chips wrap under the search box.
+- **Test-harness issue:** a headless Chrome from an earlier run hadn't exited and kept the debugging port. Later scripts connected to it, along with its stored theme choice, so a "dark" screenshot came out light. The stale process was stopped and the screenshot retaken in a fresh profile. The app was behaving correctly by honouring a saved choice.
+- Lint and the strict build are clean. No backend change.

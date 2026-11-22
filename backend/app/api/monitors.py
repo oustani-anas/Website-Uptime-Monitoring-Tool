@@ -52,6 +52,22 @@ async def _validate_url_or_422(url: str) -> str:
         ) from None
 
 
+async def _ensure_url_not_monitored(session: AsyncSession, url: str, exclude_id: int | None = None) -> None:
+    """409 if another monitor already checks this (normalized) URL.
+
+    The detail uses the same field-error shape as a 422, so the form shows it under
+    the URL field. App-level check, see DECISIONS D23 for why there's no unique index.
+    """
+    query = select(Monitor.id).where(Monitor.url == url)
+    if exclude_id is not None:
+        query = query.where(Monitor.id != exclude_id)
+    if await session.scalar(query.limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=[{"type": "duplicate_url", "loc": ["body", "url"], "msg": "This URL is already monitored"}],
+        )
+
+
 @router.get("", response_model=list[MonitorOut])
 async def list_monitors(session: SessionDep) -> list[MonitorOut]:
     result = await session.execute(select(Monitor).order_by(Monitor.id))
@@ -65,6 +81,7 @@ async def list_monitors(session: SessionDep) -> list[MonitorOut]:
 @router.post("", response_model=MonitorOut, status_code=status.HTTP_201_CREATED)
 async def create_monitor(payload: MonitorCreate, session: SessionDep) -> Monitor:
     url = await _validate_url_or_422(payload.url)
+    await _ensure_url_not_monitored(session, url)
     monitor = Monitor(name=payload.name, url=url, interval_seconds=payload.interval_seconds)
     session.add(monitor)
     await session.commit()
@@ -129,6 +146,7 @@ async def update_monitor(monitor_id: MonitorId, payload: MonitorUpdate, session:
     monitor = await _get_monitor_or_404(session, monitor_id)
     if "url" in payload.model_fields_set:
         payload.url = await _validate_url_or_422(payload.url)
+        await _ensure_url_not_monitored(session, payload.url, exclude_id=monitor.id)
     await monitor_service.apply_update(session, monitor, payload)
     await session.commit()
     await session.refresh(monitor)
