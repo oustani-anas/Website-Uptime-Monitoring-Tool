@@ -1,0 +1,6 @@
+# HTTPS is automatic: Caddy obtains and renews a Let's Encrypt certificate for
+# SITE_DOMAIN (needs ports 80 + 443 open and the domain pointing at this server).
+{$SITE_DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:80
+}

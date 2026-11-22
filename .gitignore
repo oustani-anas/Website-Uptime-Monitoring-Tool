@@ -33,4 +33,5 @@ dist/
 .claude/settings.local.json
 
 # deplo
-deploy
+deploydeploy/*
+!deploy/Caddyfile
